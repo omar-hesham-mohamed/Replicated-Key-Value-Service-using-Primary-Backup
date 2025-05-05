@@ -34,15 +34,83 @@ type KVServer struct {
 	finish      chan interface{}
 
 	// Add your declarations here.
+	kvMap map[string]string
+	role int // 0 = primary, 1 = backup, 2 = neither
+	lastClientReq map[string]int
+	serverLock sync.Mutex
+
 }
 
 func (server *KVServer) Put(args *PutArgs, reply *PutReply) error {
 	// Your code here.
+	server.serverLock.Lock()
+
+	if server.role == 0 {
+
+		clientId := args.ClientId
+		reqId := args.ReqId
+		lastReq, oldClient := server.lastClientReq[clientId]
+
+		key := args.Key
+		value := args.Value
+
+		if oldClient{
+			if lastReq >= reqId {
+				reply.Err = OK
+				if args.DoHash {
+					reply.PreviousValue = server.kvMap[key]
+				}
+			}
+		} else{
+
+			if args.DoHash {
+				oldValue := server.kvMap[key]
+				hash := hash(oldValue + value)
+				server.kvMap[key] = strconv.Itoa(int(hash)) // value stored as string
+
+				reply.PreviousValue = oldValue
+			} else{
+				server.kvMap[key] = value
+			}
+			
+			server.lastReq[clientId] = reqId
+			reply.Err = OK
+		}
+
+	} else {
+
+		reply.Err = ErrWrongServer
+
+	}
+
+	server.serverLock.Unlock()
+
 	return nil
 }
 
 func (server *KVServer) Get(args *GetArgs, reply *GetReply) error {
 	// Your code here.
+	server.serverLock.Lock()
+
+	if server.role == 0 {
+		key := args.Key
+		value, exists := server.kvMap[key]
+
+		if !exists {
+			reply.Err = ErrNoKey
+			reply.Value = ""
+		} else {
+			reply.Err = OK
+			reply.valid = value
+		}
+		
+	} else {
+
+		reply.Err = ErrWrongServer
+
+	}
+
+	server.serverLock.Unlock()
 	return nil
 }
 
@@ -53,6 +121,32 @@ func (server *KVServer) tick() {
 	view, err := server.monitorClnt.Ping(server.view.Viewnum)
 
 	// Your code here.
+
+	if err != nil {
+		return
+	}
+
+	server.serverLock.Lock()
+
+	if view.Vienum != server.view.Vienum {
+		prevRole := server.role
+
+		if view.Primary == server.id {
+			server.role = 0
+		} else if view.Backup == server.id {
+			server.role = 1
+		} else {
+			server.role = 2
+		}
+
+		// check if primary has new backup
+		if server.Role == 0 && view.Backup != "" && view.Backup != server.view.Backup {
+			// sync with new backup
+		}
+		
+	}
+
+	server.view = view
 
 }
 
@@ -72,7 +166,8 @@ func StartKVServer(monitorServer string, id string) *KVServer {
 
 	// Add your server initializations here
 	// ==================================
-
+	server.kvMap = make(map[string]string)
+	server.lastClientReq = make(map[string]int)
 	//====================================
 
 	rpcs := rpc.NewServer()

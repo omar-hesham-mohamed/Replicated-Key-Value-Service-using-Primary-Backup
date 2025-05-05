@@ -19,6 +19,8 @@ type PutArgs struct {
 	Value  string
 	DoHash bool // For PutHash
 	// Add your definitions here.
+	ClientId string
+	ReqId int
 
 	// Field names should start with capital letters for RPC to work.
 }
@@ -31,6 +33,8 @@ type PutReply struct {
 type GetArgs struct {
 	Key string
 	// Add your definitions here.
+
+	// wont check dup for get
 }
 
 type GetReply struct {
