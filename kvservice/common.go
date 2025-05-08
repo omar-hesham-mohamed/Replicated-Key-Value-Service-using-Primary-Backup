@@ -21,6 +21,7 @@ type PutArgs struct {
 	// Add your definitions here.
 	ClientId string
 	ReqId int
+	PrimaryID string
 
 	// Field names should start with capital letters for RPC to work.
 }
@@ -33,6 +34,7 @@ type PutReply struct {
 type GetArgs struct {
 	Key string
 	// Add your definitions here.
+	PrimaryID string
 
 	// wont check dup for get
 }
@@ -44,7 +46,14 @@ type GetReply struct {
 
 // Add your RPC definitions here.
 //======================================
+type SyncArgs struct {
+	KVMap         map[string]string
+    LastClientReq map[string]int
+}
 
+type SyncReply struct {
+	Err   Err
+}
 // ======================================
 
 func hash(s string) uint32 {
