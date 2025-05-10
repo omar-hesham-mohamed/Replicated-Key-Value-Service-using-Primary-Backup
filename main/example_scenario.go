@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"kvservice"
+	"Asg4/kvservice"
 	"os"
 	"strconv"
-	"sysmonitor"
+	"Asg4/sysmonitor"
 	"time"
 )
 

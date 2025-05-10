@@ -3,7 +3,8 @@ package kvservice
 import (
 	"fmt"
 	"net/rpc"
-	"sysmonitor"
+	"Asg4/sysmonitor"
+	"strconv"
 )
 
 // import "time"
@@ -17,6 +18,7 @@ type KVClient struct {
 	// Use updateView() to update this view when doing get and put as needed.
 	view sysmonitor.View
 	id   string // should be generated to be a random string
+	reqId int // can i add this?
 }
 
 func MakeKVClient(monitorServer string) *KVClient {
@@ -26,7 +28,8 @@ func MakeKVClient(monitorServer string) *KVClient {
 
 	// ToDo: Generate a random id for the client.
 	// ==================================
-
+	client.reqId = 0
+	client.id = strconv.Itoa(int(nrand()))
 	//====================================
 
 	return client
@@ -76,7 +79,19 @@ func (client *KVClient) updateView() {
 func (client *KVClient) Get(key string) string {
 
 	// Your code here.
-	return "??"
+	for {
+		client.updateView()
+		args := &GetArgs{Key: key, PrimaryID: client.view.Primary}
+		var reply GetReply
+
+		success := call(client.view.Primary, "KVServer.Get", args, &reply)
+
+		if success && reply.Err == OK {
+			return reply.Value
+		}
+
+		// should i sleep?
+	}
 }
 
 // This should tell the primary to update key's value through an RPC call.
@@ -85,7 +100,20 @@ func (client *KVClient) Get(key string) string {
 func (client *KVClient) PutAux(key string, value string, dohash bool) string {
 
 	// Your code here.
-	return "??"
+	for {
+		client.updateView()
+		args := &PutArgs{Key: key, Value: value, DoHash: dohash, ClientId: client.id, ReqId: client.reqId, PrimaryID: client.view.Primary,}
+		var reply PutReply
+
+		success := call(client.view.Primary, "KVServer.Put", args, &reply)
+
+		if success && reply.Err == OK {
+			client.reqId++
+			return reply.PreviousValue
+		}
+
+		// should i sleep?
+	}
 }
 
 // Both put and puthash rely on the auxiliary method PutAux. No modifications needed below.

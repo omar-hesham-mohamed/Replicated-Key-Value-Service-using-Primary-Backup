@@ -9,8 +9,9 @@ import (
 	"os"
 	"sync"
 	"syscall"
-	"sysmonitor"
+	"Asg4/sysmonitor"
 	"time"
+	"strconv"
 )
 
 // Debugging
@@ -76,7 +77,7 @@ func (server *KVServer) Put(args *PutArgs, reply *PutReply) error {
 							server.kvMap[key] = value
 						}
 						
-						server.lastReq[clientId] = reqId
+						server.lastClientReq[clientId] = reqId
 					}
 				} else {
 					if args.DoHash {
@@ -89,7 +90,7 @@ func (server *KVServer) Put(args *PutArgs, reply *PutReply) error {
 						server.kvMap[key] = value
 					}
 					
-					server.lastReq[clientId] = reqId
+					server.lastClientReq[clientId] = reqId
 					reply.Err = OK
 				}
 				
@@ -124,7 +125,7 @@ func (server *KVServer) Get(args *GetArgs, reply *GetReply) error {
 					reply.Value = ""
 				} else {
 					reply.Err = OK
-					reply.valid = value
+					reply.Value = value
 				}
 			}
 		} else {
@@ -133,7 +134,7 @@ func (server *KVServer) Get(args *GetArgs, reply *GetReply) error {
 				reply.Value = ""
 			} else {
 				reply.Err = OK
-				reply.valid = value
+				reply.Value = value
 			}
 		}
 	} else {
@@ -184,8 +185,8 @@ func (server *KVServer) tick() {
 
 	server.serverLock.Lock()
 
-	if view.Vienum != server.view.Vienum {
-		prevRole := server.role // do we need to check if i was primary and became backup?
+	if view.Viewnum != server.view.Viewnum {
+		//prevRole := server.role // do we need to check if i was primary and became backup?
 
 		if view.Primary == server.id {
 			server.role = 0
@@ -196,11 +197,24 @@ func (server *KVServer) tick() {
 		}
 
 		// check if primary has new backup
-		if server.Role == 0 && view.Backup != "" && view.Backup != server.view.Backup {
+		if server.role == 0 && view.Backup != "" && view.Backup != server.view.Backup {
 			args := &SyncArgs{ KVMap:server.kvMap, LastClientReq: server.lastClientReq,}
             var reply SyncReply
             
             success := call(view.Backup, "KVServer.Sync", args, &reply)
+
+			for !success || reply.Err != OK{
+				view, err := server.monitorClnt.Ping(server.view.Viewnum)
+				if err != nil {
+					return
+				}
+
+				if view.Backup == ""{
+					break
+				}
+
+				success = call(view.Backup, "KVServer.Sync", args, &reply)
+			}
 			// what if sync fails?
 		}
 		
