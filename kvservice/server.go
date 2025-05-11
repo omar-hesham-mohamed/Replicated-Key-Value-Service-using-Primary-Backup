@@ -45,6 +45,7 @@ type KVServer struct {
 func (server *KVServer) Put(args *PutArgs, reply *PutReply) error {
 	// Your code here.
 	server.serverLock.Lock()
+	defer server.serverLock.Unlock()
 
 	if (server.role == 0 || server.role == 1) && server.view.Primary == args.PrimaryID {
 
@@ -103,14 +104,13 @@ func (server *KVServer) Put(args *PutArgs, reply *PutReply) error {
 
 	}
 
-	server.serverLock.Unlock()
-
 	return nil
 }
 
 func (server *KVServer) Get(args *GetArgs, reply *GetReply) error {
 	// Your code here.
 	server.serverLock.Lock()
+	defer server.serverLock.Unlock()
 
 	if (server.role == 0 || server.role == 1) && server.view.Primary == args.PrimaryID {
 
@@ -143,12 +143,12 @@ func (server *KVServer) Get(args *GetArgs, reply *GetReply) error {
 
 	}
 
-	server.serverLock.Unlock()
 	return nil
 }
 
 func (server *KVServer) Sync(args *SyncArgs, reply *SyncReply) error {
 	server.serverLock.Lock()
+	defer server.serverLock.Unlock()
 
 	if server.role != 1 {
         reply.Err = ErrWrongServer
@@ -166,7 +166,6 @@ func (server *KVServer) Sync(args *SyncArgs, reply *SyncReply) error {
     }
     
     reply.Err = OK
-	server.serverLock.Unlock()
 
     return nil
 }
@@ -184,6 +183,7 @@ func (server *KVServer) tick() {
 	}
 
 	server.serverLock.Lock()
+	defer server.serverLock.Unlock()
 
 	if view.Viewnum != server.view.Viewnum {
 		//prevRole := server.role // do we need to check if i was primary and became backup?
