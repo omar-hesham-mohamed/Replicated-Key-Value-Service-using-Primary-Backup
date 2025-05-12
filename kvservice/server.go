@@ -56,15 +56,18 @@ func (server *KVServer) Put(args *PutArgs, reply *PutReply) error {
 		key := args.Key
 		value := args.Value
 
-		if oldClient{
-			if lastReq >= reqId {
+		// fmt.Printf("Processing request Put: %s %s\n", key, value)
+
+
+		if oldClient && lastReq >= reqId {
+			// fmt.Println("Inside if")
 				reply.Err = OK
 				if args.DoHash {
 					reply.PreviousValue = server.kvMap[key]
 				}
-			}
+			
 		} else{
-
+				// fmt.Println("Inside else")
 				if server.view.Backup != "" && server.role == 0{
 					success := call(server.view.Backup, "KVServer.Put", &args, &reply)
 					if !(!success || reply.Err != OK ){ // only process req if backup succeedes

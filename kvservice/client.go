@@ -102,10 +102,13 @@ func (client *KVClient) PutAux(key string, value string, dohash bool) string {
 	// Your code here.
 	for {
 		client.updateView()
+		// fmt.Println("Tring to Put KV: ", key ,value, " reqId: ", client.reqId)
 		args := &PutArgs{Key: key, Value: value, DoHash: dohash, ClientId: client.id, ReqId: client.reqId, PrimaryID: client.view.Primary,}
 		var reply PutReply
 
 		success := call(client.view.Primary, "KVServer.Put", args, &reply)
+
+		// fmt.Println("Faced error : ", reply.Err)
 
 		if success && reply.Err == OK {
 			client.reqId++
