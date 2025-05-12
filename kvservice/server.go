@@ -39,6 +39,7 @@ type KVServer struct {
 	role int // 0 = primary, 1 = backup, 2 = neither
 	lastClientReq map[string]int
 	serverLock sync.Mutex
+	responseHistory map[string][]ResponseHistory
 
 }
 
@@ -61,10 +62,16 @@ func (server *KVServer) Put(args *PutArgs, reply *PutReply) error {
 
 		if oldClient && lastReq >= reqId {
 			// fmt.Println("Inside if")
-				reply.Err = OK
 				if args.DoHash {
-					reply.PreviousValue = server.kvMap[key]
+					history := server.responseHistory[clientId]
+					for _, h := range history {
+						if h.ReqId == reqId {
+							reply.PreviousValue = h.PreviousValue
+							break
+						}
+					}
 				}
+				reply.Err = OK
 			
 		} else{
 				// fmt.Println("Inside else")
@@ -77,6 +84,8 @@ func (server *KVServer) Put(args *PutArgs, reply *PutReply) error {
 							server.kvMap[key] = strconv.Itoa(int(hash)) // value stored as string
 							// do we need to check that hash is same in primary and backup?
 							reply.PreviousValue = oldValue
+							server.responseHistory[clientId] = append(server.responseHistory[clientId], 
+								ResponseHistory{PreviousValue: oldValue, ReqId:reqId,})
 						} else{
 							server.kvMap[key] = value
 						}
@@ -90,6 +99,8 @@ func (server *KVServer) Put(args *PutArgs, reply *PutReply) error {
 						server.kvMap[key] = strconv.Itoa(int(hash)) // value stored as string
 
 						reply.PreviousValue = oldValue
+						server.responseHistory[clientId] = append(server.responseHistory[clientId], 
+							ResponseHistory{PreviousValue: oldValue, ReqId:reqId,})
 					} else{
 						server.kvMap[key] = value
 					}
@@ -167,6 +178,11 @@ func (server *KVServer) Sync(args *SyncArgs, reply *SyncReply) error {
     for clientId, reqId := range args.LastClientReq {
         server.lastClientReq[clientId] = reqId
     }
+
+	server.responseHistory = make(map[string][]ResponseHistory)
+    for clientId, history := range args.ResponseHistory {
+        server.responseHistory[clientId] = append(server.responseHistory[clientId], history...)
+    }
     
     reply.Err = OK
 
@@ -181,8 +197,8 @@ func (server *KVServer) tick() {
 
 	// Your code here.
 
-	if err != nil {
-		return
+	for err != nil {
+		view, err = server.monitorClnt.Ping(server.view.Viewnum)
 	}
 
 	server.serverLock.Lock()
@@ -201,16 +217,16 @@ func (server *KVServer) tick() {
 
 		// check if primary has new backup
 		if server.role == 0 && view.Backup != "" && view.Backup != server.view.Backup {
-			args := &SyncArgs{ KVMap:server.kvMap, LastClientReq: server.lastClientReq,}
+			args := &SyncArgs{ KVMap:server.kvMap, LastClientReq: server.lastClientReq, ResponseHistory: server.responseHistory,}
             var reply SyncReply
             
             success := call(view.Backup, "KVServer.Sync", args, &reply)
 
-			for !success || reply.Err != OK{
-				view, err := server.monitorClnt.Ping(server.view.Viewnum)
-				if err != nil {
-					return
-				}
+			for !success || reply.Err != OK || err != nil {
+				view, err = server.monitorClnt.Ping(server.view.Viewnum)
+				// if err != nil {
+				// 	return
+				// }
 
 				if view.Backup == ""{
 					break
@@ -245,6 +261,7 @@ func StartKVServer(monitorServer string, id string) *KVServer {
 	// ==================================
 	server.kvMap = make(map[string]string)
 	server.lastClientReq = make(map[string]int)
+	server.responseHistory = make(map[string][]ResponseHistory)
 	//====================================
 
 	rpcs := rpc.NewServer()

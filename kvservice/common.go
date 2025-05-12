@@ -49,10 +49,16 @@ type GetReply struct {
 type SyncArgs struct {
 	KVMap         map[string]string
     LastClientReq map[string]int
+	ResponseHistory map[string][]ResponseHistory
 }
 
 type SyncReply struct {
 	Err   Err
+}
+
+type ResponseHistory struct {
+    PreviousValue string
+    ReqId        int
 }
 // ======================================
 
